@@ -1,0 +1,424 @@
+# Advent of Code 2021
+
+## Day 4
+
+```elixir
+defmodule D4 do
+  def mark(card, number) do
+    card
+    |> List.flatten()
+    |> Enum.map(fn
+      {^number, _} -> {number, true}
+      n -> n
+    end)
+    |> Enum.chunk_every(5)
+  end
+
+  def wins?(card) do
+    Enum.any?(card, fn row -> Enum.all?(row, &elem(&1, 1)) end) or
+      card
+      |> Enum.zip()
+      |> Enum.any?(fn col -> col |> Tuple.to_list() |> Enum.all?(&elem(&1, 1)) end)
+  end
+
+  def score(card, number) do
+    card
+    |> List.flatten()
+    |> Enum.reject(&elem(&1, 1))
+    |> Enum.map(&elem(&1, 0))
+    |> Enum.sum()
+    |> then(&(&1 * number))
+  end
+end
+
+[numbers | cards] =
+  "2021/input4.txt"
+  |> File.read!()
+  |> String.split("\n\n", trim: true)
+
+numbers = String.split(numbers, ",") |> Enum.map(&String.to_integer/1)
+
+cards =
+  cards
+  |> Enum.map(fn card ->
+    card
+    |> String.split("\n", trim: true)
+    |> Enum.map(fn line ->
+      line
+      |> String.split(~r/\s+/, trim: true)
+      |> Enum.map(&{String.to_integer(&1), false})
+    end)
+  end)
+
+{winning_card, winning_number} =
+  Enum.reduce_while(numbers, cards, fn n, state ->
+    new_state = Enum.map(state, &D4.mark(&1, n))
+    winner = Enum.find(new_state, &D4.wins?/1)
+    if winner, do: {:halt, {winner, n}}, else: {:cont, new_state}
+  end)
+
+D4.score(winning_card, winning_number)
+```
+
+```elixir
+{state, winners} =
+  numbers
+  |> Enum.reduce({cards, []}, fn n, {state, winners} ->
+    {new_winners, remaining} =
+      state
+      |> Enum.map(&D4.mark(&1, n))
+      |> Enum.split_with(&D4.wins?/1)
+
+    case new_winners do
+      [] -> {remaining, winners}
+      ws -> {remaining, List.insert_at(winners, -1, {n, ws})}
+    end
+  end)
+
+{number, cards} = List.last(winners)
+D4.score(List.first(cards), number)
+```
+
+## Day 5
+
+```elixir
+defmodule D5 do
+  def to_lines(input) do
+    input
+    |> String.split("\n", trim: true)
+    |> Enum.map(fn line ->
+      ~r/([0-9]+),([0-9]+) -> ([0-9]+),([0-9]+)/
+      |> Regex.run(line)
+      |> Enum.drop(1)
+      |> Enum.map(&String.to_integer/1)
+      |> Enum.chunk_every(2)
+    end)
+  end
+
+  def inc(map, {_x, _y} = c), do: Map.update(map, c, 1, &(&1 + 1))
+
+  def draw(map, [[x1, y1], [x2, y2]]) do
+    cond do
+      x1 == x2 ->
+        Enum.reduce(y1..y2, map, fn y, acc -> D5.inc(acc, {x1, y}) end)
+
+      y1 == y2 ->
+        Enum.reduce(x1..x2, map, fn x, acc -> D5.inc(acc, {x, y1}) end)
+
+      x1 < x2 and y1 < y2 ->
+        x1..x2 |> Enum.with_index(y1) |> Enum.reduce(map, fn c, acc -> D5.inc(acc, c) end)
+
+      x1 < x2 and y1 > y2 ->
+        x1..x2
+        |> Enum.with_index(fn x, i -> {x, y1 - i} end)
+        |> Enum.reduce(map, fn c, acc -> D5.inc(acc, c) end)
+
+      x1 > x2 and y1 < y2 ->
+        x1..x2//-1 |> Enum.with_index(y1) |> Enum.reduce(map, fn c, acc -> D5.inc(acc, c) end)
+
+      x1 > x2 and y1 > y2 ->
+        x1..x2//-1
+        |> Enum.with_index(fn x, i -> {x, y1 - i} end)
+        |> Enum.reduce(map, fn c, acc -> D5.inc(acc, c) end)
+    end
+  end
+end
+
+lines =
+  "2021/input5.txt"
+  |> File.read!()
+  |> D5.to_lines()
+
+lines
+|> Enum.filter(fn [[x1, y1], [x2, y2]] -> x1 == x2 or y1 == y2 end)
+|> Enum.reduce(%{}, fn coordinates, map -> D5.draw(map, coordinates) end)
+|> Enum.count(fn {_k, v} -> v > 1 end)
+```
+
+```elixir
+lines
+|> Enum.reduce(%{}, fn coordinates, map -> D5.draw(map, coordinates) end)
+|> Enum.count(fn {_k, v} -> v > 1 end)
+```
+
+## Day 6
+
+```elixir
+defmodule D6 do
+  def step(fish) do
+    Enum.reduce(fish, %{}, fn
+      {0, c}, acc -> acc |> Map.update(6, c, &(&1 + c)) |> Map.update(8, c, &(&1 + c))
+      {f, c}, acc -> Map.update(acc, f - 1, c, &(&1 + c))
+    end)
+  end
+
+  def run(fish, days) do
+    fish
+    |> Enum.frequencies()
+    |> then(&Enum.reduce(1..days, &1, fn _, f -> D6.step(f) end))
+    |> Map.values()
+    |> Enum.sum()
+  end
+end
+
+lanternfish =
+  "2021/input6.txt"
+  |> File.read!()
+  |> String.trim()
+  |> String.split(",", trim: true)
+  |> Enum.map(&String.to_integer/1)
+
+D6.run(lanternfish, 80)
+```
+
+```elixir
+D6.run(lanternfish, 256)
+```
+
+## Day 9
+
+```elixir
+defmodule D9 do
+  def to_map(input, seperator \\ "\n") do
+    input
+    |> String.split(seperator, trim: true)
+    |> Enum.map(&(&1 |> String.to_integer() |> Integer.digits() |> Enum.with_index()))
+    |> Enum.with_index()
+    |> Enum.reduce(%{}, fn {row, x}, map ->
+      Map.merge(map, Enum.reduce(row, %{}, fn {col, y}, acc -> Map.put(acc, {x, y}, col) end))
+    end)
+  end
+
+  def neighbours(map, {x, y}), do: Map.take(map, [{x - 1, y}, {x + 1, y}, {x, y - 1}, {x, y + 1}])
+
+  def is_low?(map, {x, y}) do
+    point = Map.fetch!(map, {x, y})
+
+    map
+    |> D9.neighbours({x, y})
+    |> Map.values()
+    |> Enum.all?(&(point < &1))
+  end
+
+  def low_points(map) do
+    Map.filter(map, fn {k, _v} -> D9.is_low?(map, k) end)
+  end
+
+  def find_basin(map, c), do: D9.find_basin(map, [c], MapSet.new())
+  def find_basin(_map, [], _travelled), do: MapSet.new()
+
+  def find_basin(map, points, travelled) do
+    to_travel =
+      points
+      |> Enum.flat_map(&D9.neighbours(map, &1))
+      |> Enum.reject(fn {c, h} -> h == 9 or MapSet.member?(travelled, c) end)
+      |> Enum.map(&elem(&1, 0))
+
+    # |> IO.inspect()
+
+    # Add end condition for this
+    MapSet.new(points)
+    |> MapSet.union(
+      D9.find_basin(map, to_travel, MapSet.union(travelled, MapSet.new(to_travel)))
+      |> MapSet.new()
+    )
+  end
+end
+
+map =
+  "2021/input9.txt"
+  |> File.read!()
+  |> D9.to_map()
+
+map
+|> D9.low_points()
+|> Enum.reduce(0, fn {_k, v}, acc -> acc + (v + 1) end)
+```
+
+```elixir
+map
+|> D9.low_points()
+|> Map.keys()
+|> Enum.map(fn c -> map |> D9.find_basin(c) |> Enum.uniq() |> length() end)
+|> Enum.sort(:desc)
+|> Enum.take(3)
+|> Enum.reduce(&(&1 * &2))
+```
+
+## Day 10
+
+```elixir
+defmodule D10 do
+  def parse(c, [?( | t]), do: parse(c ++ '(', t)
+  def parse(c, [?[ | t]), do: parse(c ++ '[', t)
+  def parse(c, [?{ | t]), do: parse(c ++ '{', t)
+  def parse(c, [?< | t]), do: parse(c ++ '<', t)
+
+  def parse(c, [?) | t]), do: close(c, ?(, ")", t)
+  def parse(c, [?] | t]), do: close(c, ?[, "]", t)
+  def parse(c, [?} | t]), do: close(c, ?{, "}", t)
+  def parse(c, [?> | t]), do: close(c, ?<, ">", t)
+
+  def parse(c, ''), do: {:incomplete, c}
+  def parse(line), do: parse([], String.to_charlist(line))
+
+  defp close(c, expected, instead, t) do
+    if List.last(c) != expected do
+      {:corrupted, instead}
+    else
+      c |> Enum.drop(-1) |> parse(t)
+    end
+  end
+end
+
+scores = %{")" => 3, "]" => 57, "}" => 1197, ">" => 25137}
+
+input =
+  """
+  [({(<(())[]>[[{[]{<()<>>
+  [(()[<>])]({[<{<<[]>>(
+  {([(<{}[<>[]}>{[]{[(<()>
+  (((({<>}<{<{<>}{[]{[]{}
+  [[<[([]))<([[{}[[()]]]
+  [{[{({}]{}}([{[{{{}}([]
+  {<[[]]>}<{[{[{[]{()[[[]
+  [<(<(<(<{}))><([]([]()
+  <{([([[(<>()){}]>(<<{{
+  <{([{{}}[<[[[<>{}]]]>[]]
+  """
+  |> String.split("\r\n", trim: true)
+
+input =
+  "2021/input10.txt"
+  |> File.read!()
+  |> String.split("\n", trim: true)
+
+parsed = Enum.map(input, &D10.parse/1)
+
+parsed
+|> Enum.filter(&(elem(&1, 0) == :corrupted))
+|> Keyword.values()
+|> Enum.map(&scores[&1])
+|> Enum.sum()
+```
+
+```elixir
+parsed
+|> Enum.filter(&(elem(&1, 0) == :incomplete))
+|> Enum.map(fn {_s, s} ->
+  s
+  |> Enum.reverse()
+  |> Enum.map(fn
+    ?( -> 1
+    ?[ -> 2
+    ?{ -> 3
+    ?< -> 4
+  end)
+  |> Enum.reduce(0, fn score, acc ->
+    acc * 5 + score
+  end)
+end)
+|> Enum.sort()
+|> then(&Enum.at(&1, div(length(&1), 2)))
+```
+
+## Day 11
+
+```elixir
+defmodule D11 do
+  def input(lines) do
+    lines
+    |> Enum.map(&(&1 |> String.to_integer() |> Integer.digits() |> Enum.with_index()))
+    |> Enum.with_index()
+    |> Enum.reduce(%{}, fn {row, x}, map ->
+      Map.merge(map, Enum.reduce(row, %{}, fn {col, y}, acc -> Map.put(acc, {x, y}, col) end))
+    end)
+  end
+
+  def run_until(octopuses, fun, steps) do
+    if fun.(octopuses), do: steps, else: run_until(step(octopuses), fun, steps + 1)
+  end
+
+  def flashes(octopuses, steps) do
+    Enum.reduce(1..steps, {octopuses, 0}, fn _o, {o, c} ->
+      o
+      |> step()
+      |> then(&{&1, c + Enum.count(&1, fn {_c, e} -> e == 0 end)})
+    end)
+  end
+
+  def step(octopuses) do
+    s1 = Map.map(octopuses, fn {_c, e} -> e + 1 end)
+    flash = flash(s1)
+    add_flash(s1, flash, MapSet.new(flash))
+  end
+
+  defp add_flash(octopuses, flash, flashed) do
+    octopuses =
+      flash
+      |> Enum.flat_map(&neighbours/1)
+      |> Enum.frequencies()
+      |> Map.merge(octopuses, fn _c, e1, e2 -> e1 + e2 end)
+
+    new_flashed = MapSet.union(flashed, MapSet.new(flash))
+
+    new_flash =
+      octopuses
+      |> flash()
+      |> MapSet.new()
+      |> MapSet.difference(new_flashed)
+
+    case MapSet.size(new_flash) do
+      0 -> Map.map(octopuses, fn {_c, e} -> if e > 9, do: 0, else: e end)
+      _ -> add_flash(octopuses, new_flash, new_flashed)
+    end
+  end
+
+  defp flash(octopuses) do
+    octopuses |> Map.filter(fn {_c, e} -> e > 9 end) |> Map.keys()
+  end
+
+  defp neighbours({x, y} = c, xm \\ 9, ym \\ 9) do
+    xmin = max(x - 1, 0)
+    xmax = min(x + 1, xm)
+    ymin = max(y - 1, 0)
+    ymax = min(y + 1, ym)
+
+    xmin..xmax
+    |> Enum.flat_map(fn x0 -> Enum.map(ymin..ymax, fn y0 -> {x0, y0} end) end)
+    |> Enum.reject(&(&1 == c))
+  end
+
+  def to_string(octopuses) do
+    octopuses
+    |> Enum.group_by(fn {{x, _y}, _e} -> x end, fn {{_x, y}, e} -> {y, e} end)
+    |> Enum.sort()
+    |> Enum.map(fn {_x, ys} -> ys |> Enum.sort() |> Enum.map(&elem(&1, 1)) |> Enum.join("") end)
+    |> Enum.join("\n")
+  end
+end
+
+octopuses =
+  "2021/input11.txt"
+  |> File.read!()
+  |> String.split("\n", trim: true)
+  |> D11.input()
+
+octopuses
+|> D11.flashes(100)
+|> elem(1)
+```
+
+```elixir
+D11.run_until(octopuses, fn o -> Enum.all?(o, fn {_c, e} -> e == 0 end) end, 0)
+```
+
+## Day 12
+
+```elixir
+connections =
+  "2021/input12.txt"
+  |> File.read!()
+  |> String.split("\n", trim: true)
+  |> Enum.map(fn line -> line |> String.split("-") |> List.to_tuple() end)
+```

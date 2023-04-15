@@ -1,0 +1,532 @@
+# Advent of Code 2020
+
+## Day 1
+
+```elixir
+defmodule D1 do
+  def pair_sum(numbers, total) do
+    try do
+      Enum.each(numbers, fn n -> if (total - n) in numbers, do: throw({n, total - n}) end)
+      nil
+    catch
+      n -> n
+    end
+  end
+end
+
+input1 =
+  "2020/input1.txt"
+  |> File.read!()
+  |> String.split("\n", trim: true)
+  |> Enum.map(&String.to_integer/1)
+
+{x, y} = D1.pair_sum(input1, 2020)
+x * y
+```
+
+```elixir
+try do
+  Enum.each(input1, fn i ->
+    case D1.pair_sum(List.delete(input1, i), 2020 - i) do
+      {x, y} -> throw({i, x, y})
+      _ -> nil
+    end
+  end)
+catch
+  n -> n
+end
+```
+
+## Day 2
+
+```elixir
+input2 =
+  "2020/input2.txt"
+  |> File.stream!()
+  |> Stream.reject(&(&1 == "\n"))
+  |> Stream.filter(fn line ->
+    [policy, password] = String.split(line, ": ")
+    [range, letter] = String.split(policy, " ")
+    [rmin, rmax] = String.split(range, "-")
+    count = Regex.scan(~r/#{letter}/, password) |> Enum.count()
+    count >= String.to_integer(rmin) and count <= String.to_integer(rmax)
+  end)
+  |> Enum.count()
+```
+
+```elixir
+input2 =
+  "2020/input2.txt"
+  |> File.stream!()
+  |> Stream.reject(&(&1 == "\n"))
+  |> Stream.filter(fn line ->
+    [policy, password] = String.split(line, ": ")
+    [range, letter] = String.split(policy, " ")
+    [pos1, pos2] = String.split(range, "-")
+
+    letter1 = String.at(password, String.to_integer(pos1) - 1)
+    letter2 = String.at(password, String.to_integer(pos2) - 1)
+
+    (letter1 == letter or letter2 == letter) and letter1 != letter2
+  end)
+  |> Enum.count()
+```
+
+## Day 3
+
+```elixir
+defmodule D3 do
+  def count_trees(map, right, down) do
+    width = map |> List.first() |> String.length()
+
+    map
+    |> Enum.drop(1)
+    |> Enum.chunk_every(down)
+    |> Enum.reduce({right, 0}, fn lines, {x, count} ->
+      case lines |> List.last() |> String.graphemes() |> Enum.at(x) do
+        "#" -> {Integer.mod(x + right, width), count + 1}
+        _ -> {Integer.mod(x + right, width), count}
+      end
+    end)
+    |> elem(1)
+  end
+end
+
+map =
+  "2020/input3.txt"
+  |> File.read!()
+  |> String.split("\n", trim: true)
+
+D3.count_trees(map, 3, 1)
+```
+
+```elixir
+[{1, 1}, {3, 1}, {5, 1}, {7, 1}, {1, 2}]
+|> Enum.reduce(1, fn {r, d}, acc -> IO.inspect(D3.count_trees(map, r, d)) * acc end)
+```
+
+## Day 4
+
+```elixir
+passports =
+  "2020/input4.txt"
+  |> File.read!()
+  |> String.split("\n\n", trim: true)
+  |> Enum.map(fn p ->
+    p
+    |> String.split(~r/\s/)
+    |> Map.new(fn f -> String.split(f, ":") |> List.to_tuple() end)
+  end)
+
+fields = ["byr", "iyr", "eyr", "hgt", "hcl", "ecl", "pid"]
+
+has_fields? = fn p, f -> Map.take(p, f) |> map_size() == length(fields) end
+
+Enum.count(passports, &has_fields?.(&1, fields))
+```
+
+```elixir
+between? = fn f, a, b -> String.to_integer(f) |> then(&(&1 >= a and &1 <= b)) end
+
+vhgt? = fn
+  {h, "cm"} -> between?.(h, 150, 193)
+  {h, "in"} -> between?.(h, 59, 76)
+  _ -> false
+end
+
+valid? = fn p ->
+  [
+    between?.(p["byr"], 1920, 2002),
+    between?.(p["iyr"], 2010, 2020),
+    between?.(p["eyr"], 2020, 2030),
+    p["hgt"] |> String.split_at(-2) |> vhgt?.(),
+    String.match?(p["hcl"], ~r/^#[0-9a-f]{6}$/),
+    p["ecl"] in ~w(amb blu brn gry grn hzl oth),
+    String.match?(p["pid"], ~r/^[0-9]{9}$/)
+  ]
+  |> Enum.all?()
+end
+
+passports
+|> Enum.filter(&has_fields?.(&1, fields))
+|> Enum.count(&valid?.(&1))
+```
+
+## Day 5
+
+```elixir
+seats =
+  "2020/input5.txt"
+  |> File.read!()
+  |> String.split("\n", trim: true)
+  |> Enum.map(fn line ->
+    line
+    |> String.replace(~r/(F|L)/, "0")
+    |> String.replace(~r/(R|B)/, "1")
+    |> String.split_at(7)
+    |> Tuple.to_list()
+    |> Enum.map(&(Integer.parse(&1, 2) |> elem(0)))
+    |> List.to_tuple()
+  end)
+
+seats
+|> Enum.max_by(fn {r, c} -> r * 8 + c end)
+|> then(fn {r, c} -> r * 8 + c end)
+```
+
+```elixir
+seats
+|> Enum.map(fn {r, c} -> r * 8 + c end)
+|> Enum.sort()
+|> Enum.chunk_every(2, 1, :discard)
+|> Enum.find_value(fn [a, b] -> if b - a == 2, do: a + 1 end)
+```
+
+## Day 6
+
+```elixir
+groups =
+  "2020/input6.txt"
+  |> File.read!()
+  |> String.split("\n\n", trim: true)
+
+groups
+|> Enum.map(fn group ->
+  group
+  |> String.replace("\n", "")
+  |> String.graphemes()
+  |> Enum.uniq()
+  |> length
+end)
+|> Enum.sum()
+```
+
+```elixir
+groups
+|> Enum.map(fn group ->
+  group
+  |> String.split("\n")
+  |> Enum.map(fn questions -> questions |> String.graphemes() |> MapSet.new() end)
+  |> Enum.reduce(fn n, acc -> MapSet.intersection(n, acc) end)
+  |> MapSet.size()
+end)
+|> Enum.sum()
+```
+
+## Day 7
+
+```elixir
+defmodule D7 do
+  def to_policies(input) do
+    input
+    |> String.split("\n", trim: true)
+    |> Map.new(fn line ->
+      [recipe | ingredients] =
+        line
+        |> String.replace(~r/no other/, "")
+        |> String.replace(~r/bags?\.?/, "")
+        |> String.split(~r/(contain|,)/)
+        |> Enum.map(&String.trim/1)
+
+      {recipe,
+       case ingredients do
+         [""] ->
+           []
+
+         _ ->
+           Enum.map(ingredients, fn i ->
+             String.split(i, " ", parts: 2)
+             |> then(fn [qty, colour] -> {String.to_integer(qty), colour} end)
+           end)
+       end}
+    end)
+  end
+
+  def contains(policies, colour) do
+    policies
+    |> Enum.filter(fn {_colour, contents} ->
+      Enum.any?(contents, fn
+        {_qty, ^colour} -> true
+        _ -> false
+      end)
+    end)
+    |> MapSet.new(fn {colour, _contents} -> colour end)
+  end
+
+  def eventually_contains(policies, colour),
+    do: eventually_contains(MapSet.new(), policies, colour)
+
+  def eventually_contains(colour_set, policies, colour) do
+    colours = contains(policies, colour)
+
+    if MapSet.subset?(colours, colour_set) do
+      colour_set
+    else
+      new_set = MapSet.union(colour_set, colours)
+
+      MapSet.difference(colours, colour_set)
+      |> Enum.flat_map(&eventually_contains(new_set, policies, &1))
+      |> MapSet.new()
+      |> MapSet.union(new_set)
+    end
+  end
+end
+
+policies =
+  "2020/input7.txt"
+  |> File.read!()
+  |> D7.to_policies()
+
+policies
+|> D7.eventually_contains("shiny gold")
+|> MapSet.size()
+```
+
+```elixir
+defmodule D7Part2 do
+  def has(policies, colour) do
+    Enum.map(policies[colour], fn {qty, colour} ->
+      ingredients = has(policies, colour)
+
+      case ingredients do
+        [] -> qty
+        _ -> qty + qty * has(policies, colour)
+      end
+    end)
+    |> Enum.sum()
+  end
+end
+
+policies
+|> D7Part2.has("shiny gold")
+```
+
+## Day 8
+
+```elixir
+defmodule D8 do
+  def parse_instructions(input) do
+    input
+    |> String.split("\n", trim: true)
+    |> Enum.map(fn instruction ->
+      [op, arg] = String.split(instruction, " ")
+      {String.to_existing_atom(op), Integer.parse(arg) |> elem(0)}
+    end)
+  end
+
+  def step(instructions, {ip, acc}) do
+    {op, arg} = Enum.at(instructions, ip)
+
+    case op do
+      :acc -> {ip + 1, acc + arg}
+      :jmp -> {ip + arg, acc}
+      :nop -> {ip + 1, acc}
+    end
+  end
+
+  def run(instructions), do: run_until_loop(instructions, [], {0, 0})
+
+  def run_until_loop(instructions, history, {ip, _acc} = state) do
+    if ip in history do
+      state
+    else
+      history = [ip | history]
+      run_until_loop(instructions, history, step(instructions, state))
+    end
+  end
+
+  def terminates?(instructions), do: terminates?(instructions, [], {0, 0})
+
+  def terminates?(instructions, history, {ip, _acc} = state) do
+    cond do
+      ip in history ->
+        {false, state}
+
+      ip >= length(instructions) ->
+        {true, state}
+
+      true ->
+        history = [ip | history]
+        terminates?(instructions, history, step(instructions, state))
+    end
+  end
+end
+
+ops = [:acc, :jmp, :nop]
+
+instructions =
+  "2020/input8.txt"
+  |> File.read!()
+  |> D8.parse_instructions()
+
+{ip, acc} = D8.run(instructions)
+acc
+```
+
+```elixir
+swappable =
+  instructions
+  |> Enum.with_index()
+  |> Enum.filter(fn {{op, _arg}, _i} -> op == :jmp or op == :nop end)
+  |> Enum.map(&elem(&1, 1))
+
+swappable
+|> Enum.map(fn i ->
+  List.update_at(instructions, i, fn
+    {:jmp, arg} -> {:nop, arg}
+    {:nop, arg} -> {:jmp, arg}
+  end)
+  |> D8.terminates?()
+end)
+|> Keyword.get(true)
+|> elem(1)
+```
+
+## Day 9
+
+```elixir
+defmodule D9 do
+  def has_sum?({numbers, total}) do
+    Enum.any?(numbers, &((total - &1) in numbers))
+  end
+
+  def slice(numbers, premable) do
+    Enum.map(premable..(length(numbers) - 1), fn i ->
+      {Enum.slice(numbers, (i - premable)..(i - 1)), Enum.at(numbers, i)}
+    end)
+  end
+
+  def invalid_number(numbers, premable) do
+    numbers
+    |> slice(premable)
+    |> Enum.find(&(D9.has_sum?(&1) == false))
+    |> elem(1)
+  end
+
+  def contiguous_sum(numbers, total) do
+    start_indices =
+      numbers
+      |> Enum.with_index()
+      |> Enum.filter(&(elem(&1, 0) <= total))
+      |> Enum.map(&elem(&1, 1))
+
+    Enum.find_value(start_indices, fn i ->
+      numbers
+      |> Enum.drop(i)
+      |> Enum.reduce_while([], fn i, acc ->
+        cond do
+          Enum.sum(acc) + i < total -> {:cont, List.insert_at(acc, -1, i)}
+          Enum.sum(acc) + i == total -> {:halt, List.insert_at(acc, -1, i)}
+          true -> {:halt, nil}
+        end
+      end)
+    end)
+  end
+end
+
+numbers =
+  "2020/input9.txt"
+  |> File.read!()
+  |> String.split("\n", trim: true)
+  |> Enum.map(&String.to_integer/1)
+
+n1 = D9.invalid_number(numbers, 25)
+```
+
+```elixir
+contiguous_range = D9.contiguous_sum(numbers, n1)
+Enum.min(contiguous_range) + Enum.max(contiguous_range)
+```
+
+## Day 10
+
+```elixir
+adapters =
+  "2020/input10.txt"
+  |> File.read!()
+  |> String.split("\n", trim: true)
+  |> Enum.map(&String.to_integer/1)
+
+device = Enum.max(adapters) + 3
+
+differences =
+  ([0] ++ adapters ++ [device])
+  |> Enum.sort()
+  |> Enum.chunk_every(2, 1, :discard)
+  |> Enum.map(fn [a, b] -> b - a end)
+  |> Enum.frequencies()
+
+differences[1] * differences[3]
+```
+
+```elixir
+defmodule D10 do
+  defp f(0), do: 1
+  defp f(n), do: n * f(n - 1)
+  defp c(n, r), do: div(f(n), f(r) * f(n - r))
+
+  def combinations(list) do
+    list
+    |> length()
+    |> then(fn n -> Enum.map(0..n, &c(n, &1)) end)
+    |> Enum.sum()
+  end
+end
+
+# adapters = [16, 10, 15, 5, 1, 11, 7, 19, 6, 12, 4]
+adapters = [
+  28,
+  33,
+  18,
+  42,
+  31,
+  14,
+  46,
+  20,
+  48,
+  47,
+  24,
+  23,
+  49,
+  45,
+  19,
+  38,
+  39,
+  11,
+  1,
+  32,
+  25,
+  35,
+  8,
+  17,
+  7,
+  9,
+  4,
+  2,
+  34,
+  10,
+  3
+]
+
+device = Enum.max(adapters) + 3
+
+ports = [0] ++ adapters ++ [device]
+
+ports
+|> Enum.sort()
+|> IO.inspect()
+|> Enum.map(fn n -> {n, Enum.filter(ports, &(&1 <= n + 3)) |> Enum.max()} end)
+|> Enum.reduce([], fn {i, j}, acc ->
+  cond do
+    length(acc) == 0 -> [{i, j}]
+    List.last(acc) |> elem(1) == i -> acc ++ [{i, j}]
+    true -> acc
+  end
+end)
+|> Enum.drop(-1)
+|> Enum.map(fn {i, j} -> {i, j, Enum.filter(ports, &(&1 > i and &1 < j))} end)
+|> IO.inspect(charlists: :as_list)
+|> Enum.filter(fn {_, _, k} -> length(k) > 0 end)
+|> Enum.map(&(elem(&1, 2) |> D10.combinations()))
+|> Enum.reduce(fn n, acc -> n * acc end)
+```
